@@ -188,17 +188,48 @@ end
 
 ----------------------------------------------------- Notifications
 
+-- Cross-executor notification.
+--
+--   Severe:  send_notification(msg, level)
+--              level is REQUIRED and MUST be one of:
+--              "success" / "info" / "error" / "warning".
+--              Anything else throws: "SendNotify: invalid type - argument #2".
+--
+--   Matcha:  notify(msg, title, duration)
+--              title is a freeform string displayed above the message.
+--              duration is in seconds.
+--
+-- Wrapper contract: Notify(message, level?)
+--   - level is optional from the caller's perspective.
+--   - On Severe, we coerce missing/invalid level to "info" so the call
+--     never crashes on unexpected input. The four valid levels pass
+--     through unchanged.
+--   - On Matcha, the level (if any) becomes the title — capitalized for
+--     readability. Missing or unknown level becomes "Notice".
+local _SEVERE_LEVELS = {
+    success = true,
+    info    = true,
+    error   = true,
+    warning = true,
+}
+
 local function Notify(message, level)
     if IS_SEVERE then
-        if level then send_notification(message, level)
-        else          send_notification(message) end
+        -- Severe rejects anything outside the four-value set, so coerce.
+        if not _SEVERE_LEVELS[level] then level = "info" end
+        send_notification(message, level)
     else
         local title
         if     level == "error"   then title = "Error"
         elseif level == "warning" then title = "Warning"
         elseif level == "success" then title = "Success"
         elseif level == "info"    then title = "Info"
-        else                           title = "Notice"
+        elseif type(level) == "string" and #level > 0 then
+            -- Caller passed a freeform string (Matcha-native style). Use it
+            -- as the title verbatim — Matcha supports any title text.
+            title = level
+        else
+            title = "Notice"
         end
         notify(message, title, 3)
     end
