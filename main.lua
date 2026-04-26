@@ -414,11 +414,20 @@ end
 
 ----------------------------------------------------- Return surface
 
--- We both `return` the table AND assign it to _G.DualCompat. Reason:
--- Matcha's loadstring does not propagate the chunk's return value back
--- to the caller, so `local C = loadstring(src)()` yields nil there.
--- Severe respects the return value normally. Publishing on _G makes
--- both work — on Severe you can use either; on Matcha use _G.DualCompat.
+-- Publishing strategy:
+--
+-- Both Severe and Matcha sandbox `_G` away from loadstring'd chunks, AND
+-- Matcha's loadstring drops the chunk's return value. So neither
+-- `local C = loadstring(...)()` nor `_G.DualCompat` works portably.
+--
+-- The trick: walk up the call stack with getfenv and inject the table
+-- into the *caller's* environment as `DualCompat`. After loadstring()()
+-- runs, the caller can just reference `DualCompat` as if it were a local.
+--
+-- We also try a few other publishing channels as belt-and-suspenders:
+--   - getgenv() if the executor exposes it (most do)
+--   - shared (Roblox-standard cross-script table)
+--   - return value (works on Severe, ignored by Matcha)
 
 local API = {
     -- Detection
@@ -461,7 +470,41 @@ local API = {
     Draw = Draw,
 }
 
-_G.DualCompat = API
+-- 1) getfenv injection: walk up until we find a different env than ours,
+--    that's the caller. Plant `DualCompat` there.
+do
+    local myEnv = getfenv(1)
+    local level = 2
+    while true do
+        local ok, env = pcall(getfenv, level)
+        if not ok or not env then break end
+        if env ~= myEnv then
+            env.DualCompat = API
+            break
+        end
+        level = level + 1
+        if level > 10 then break end  -- safety cap
+    end
+end
+
+-- 2) getgenv() — many executors expose this for cross-script globals.
+if type(getgenv) == "function" then
+    local ok, genv = pcall(getgenv)
+    if ok and type(genv) == "table" then
+        genv.DualCompat = API
+    end
+end
+
+-- 3) shared — Roblox-standard cross-script table. Lowest priority because
+--    it's a shared namespace, but it's a useful fallback.
+if type(shared) == "table" then
+    shared.DualCompat = API
+end
+
+-- 4) _G — keep trying, doesn't hurt.
+if type(_G) == "table" then
+    _G.DualCompat = API
+end
 
 print("[DUAL] Compatibility header loaded")
 
