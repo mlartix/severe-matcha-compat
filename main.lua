@@ -414,9 +414,13 @@ end
 
 ----------------------------------------------------- Return surface
 
-print("[DUAL] Compatibility header loaded")
+-- We both `return` the table AND assign it to _G.DualCompat. Reason:
+-- Matcha's loadstring does not propagate the chunk's return value back
+-- to the caller, so `local C = loadstring(src)()` yields nil there.
+-- Severe respects the return value normally. Publishing on _G makes
+-- both work — on Severe you can use either; on Matcha use _G.DualCompat.
 
-_G.DualCompat = {
+local API = {
     -- Detection
     IS_SEVERE = IS_SEVERE,
     IS_MATCHA = IS_MATCHA,
@@ -456,4 +460,9 @@ _G.DualCompat = {
     -- Drawing
     Draw = Draw,
 }
-return _G.DualCompat
+
+_G.DualCompat = API
+
+print("[DUAL] Compatibility header loaded")
+
+return API
