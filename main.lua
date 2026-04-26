@@ -412,6 +412,62 @@ function Draw.clear()
     end
 end
 
+----------------------------------------------------- Debug helper
+
+-- Matcha's `print` renders function values as nil and tables as nothing
+-- useful, which makes inspecting the API table painful. Dump walks a
+-- table and prints `key  type[  -> preview]` for each entry, so you get
+-- usable introspection on either executor.
+--
+-- Usage:
+--     DualCompat.Dump(DualCompat)        -- one level
+--     DualCompat.Dump(DualCompat, 2)     -- recurse 2 deep
+--     DualCompat.Dump(DualCompat.Mem)    -- inspect just the Mem subtable
+local function Dump(tbl, depth, _indent, _seen)
+    depth   = depth or 1
+    _indent = _indent or ""
+    _seen   = _seen or {}
+
+    if type(tbl) ~= "table" then
+        print(_indent .. "(not a table: " .. type(tbl) .. ")")
+        return
+    end
+    if _seen[tbl] then
+        print(_indent .. "(cycle)")
+        return
+    end
+    _seen[tbl] = true
+
+    -- Collect and sort keys so output is stable across runs / executors.
+    local keys = {}
+    for k in pairs(tbl) do keys[#keys + 1] = k end
+    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+
+    for _, k in ipairs(keys) do
+        local v  = tbl[k]
+        local tv = type(v)
+        local line = _indent .. tostring(k) .. "  " .. tv
+
+        if tv == "string" then
+            local s = v
+            if #s > 40 then s = s:sub(1, 37) .. "..." end
+            line = line .. "  -> " .. string.format("%q", s)
+        elseif tv == "number" or tv == "boolean" then
+            line = line .. "  -> " .. tostring(v)
+        elseif tv == "table" then
+            local n = 0
+            for _ in pairs(v) do n = n + 1 end
+            line = line .. "  -> {" .. n .. " keys}"
+        end
+
+        print(line)
+
+        if tv == "table" and depth > 1 then
+            Dump(v, depth - 1, _indent .. "  ", _seen)
+        end
+    end
+end
+
 ----------------------------------------------------- Return surface
 
 -- Publishing strategy:
@@ -468,6 +524,9 @@ local API = {
 
     -- Drawing
     Draw = Draw,
+
+    -- Debug
+    Dump = Dump,
 }
 
 -- 1) getfenv injection: walk up until we find a different env than ours,
