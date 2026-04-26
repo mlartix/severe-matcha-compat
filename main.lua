@@ -416,7 +416,7 @@ end
 
 print("[DUAL] Compatibility header loaded")
 
-return {
+_G.DualCompat = {
     -- Detection
     IS_SEVERE = IS_SEVERE,
     IS_MATCHA = IS_MATCHA,
@@ -456,3 +456,4 @@ return {
     -- Drawing
     Draw = Draw,
 }
+return _G.DualCompat
